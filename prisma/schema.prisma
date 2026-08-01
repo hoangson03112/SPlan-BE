@@ -1,0 +1,201 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model Workspace {
+  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name       String            @db.VarChar
+  slug       String            @unique @db.VarChar
+  createdAt  DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at DateTime?         @default(now()) @db.Timestamptz(6)
+  deleted_at DateTime?         @db.Timestamptz(6)
+  projects   Project[]
+  members    WorkspaceMember[]
+
+  @@map("workspaces")
+}
+
+model WorkspaceMember {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  role        String?   @default("member") @db.VarChar
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
+  users       users     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wm_user")
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wm_workspace")
+
+  @@index([userId], map: "idx_workspace_members_user_id")
+  @@map("workspace_members")
+}
+
+model Project {
+  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspaceId              String                     @map("workspace_id") @db.Uuid
+  industry_id              String?                    @db.Uuid
+  name                     String                     @db.VarChar
+  description              String?
+  status                   String?                    @default("active") @db.VarChar
+  active_modules           Json?                      @default("[\"board\"]")
+  createdAt                DateTime?                  @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at               DateTime?                  @default(now()) @db.Timestamptz(6)
+  deleted_at               DateTime?                  @db.Timestamptz(6)
+  custom_field_definitions custom_field_definitions[]
+  lists                    lists[]
+  industries               industries?                @relation(fields: [industry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_p_industry")
+  workspace                Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_p_workspace")
+  tasks                    Task[]
+
+  @@index([workspaceId], map: "idx_projects_workspace_id")
+  @@map("projects")
+}
+
+model Task {
+  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId      String           @map("project_id") @db.Uuid
+  list_id        String           @db.Uuid
+  title          String           @db.VarChar
+  description    String?
+  position       Int
+  metadata       Json?            @default("{}")
+  due_date       DateTime?        @db.Timestamptz(6)
+  createdAt      DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at     DateTime?        @default(now()) @db.Timestamptz(6)
+  deleted_at     DateTime?        @db.Timestamptz(6)
+  assets         Asset[]
+  comments       Comment[]
+  task_assignees task_assignees[]
+  lists          lists            @relation(fields: [list_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_t_list")
+  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_t_project")
+
+  @@index([list_id], map: "idx_tasks_list_id")
+  @@index([metadata], map: "idx_tasks_metadata", type: Gin)
+  @@index([projectId], map: "idx_tasks_project_id")
+  @@map("tasks")
+}
+
+model Asset {
+  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId      String    @map("task_id") @db.Uuid
+  uploader_id String    @db.Uuid
+  fileUrl     String    @map("file_url")
+  file_name   String    @db.VarChar
+  fileType    String    @map("file_type") @db.VarChar
+  file_size   Int?
+  version     Int?      @default(1)
+  status      String?   @default("active") @db.VarChar
+  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  deleted_at  DateTime? @db.Timestamptz(6)
+  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_a_task")
+  users       users     @relation(fields: [uploader_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_a_user")
+  comments    Comment[]
+
+  @@index([taskId], map: "idx_assets_task_id")
+  @@map("assets")
+}
+
+model Comment {
+  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  taskId        String    @map("task_id") @db.Uuid
+  assetId       String?   @map("asset_id") @db.Uuid
+  userId        String    @map("user_id") @db.Uuid
+  content       String
+  timestampMark Int?      @map("timestamp_mark")
+  x_coordinate  Decimal?  @db.Decimal
+  y_coordinate  Decimal?  @db.Decimal
+  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
+  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
+  deleted_at    DateTime? @db.Timestamptz(6)
+  asset         Asset?    @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_c_asset")
+  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_c_task")
+  users         users     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_c_user")
+
+  @@index([assetId], map: "idx_comments_asset_id")
+  @@index([taskId], map: "idx_comments_task_id")
+  @@map("comments")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model custom_field_definitions {
+  id          String    @id(map: "custom_fields_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id  String    @db.Uuid
+  name        String    @db.VarChar
+  field_key   String    @db.VarChar
+  field_type  String    @db.VarChar
+  options     Json?
+  is_required Boolean?  @default(false)
+  created_at  DateTime? @default(now()) @db.Timestamptz(6)
+  projects    Project   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cf_project")
+
+  @@unique([project_id, field_key], map: "unique_field_key_per_project")
+  @@index([project_id], map: "idx_custom_field_defs_project_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model industries {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name              String              @db.VarChar
+  slug              String              @unique @db.VarChar
+  description       String?
+  created_at        DateTime?           @default(now()) @db.Timestamptz(6)
+  project_templates project_templates[]
+  projects          Project[]
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model lists {
+  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id      String    @db.Uuid
+  name            String    @db.VarChar
+  position        Int
+  status_category String    @default("to_do") @db.VarChar
+  created_at      DateTime? @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
+  deleted_at      DateTime? @db.Timestamptz(6)
+  projects        Project   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_l_project")
+  tasks           Task[]
+
+  @@index([project_id], map: "idx_lists_project_id")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model project_templates {
+  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  industry_id     String     @db.Uuid
+  name            String     @db.VarChar
+  default_modules Json?      @default("[]")
+  default_lists   Json?
+  default_fields  Json?
+  created_at      DateTime?  @default(now()) @db.Timestamptz(6)
+  updated_at      DateTime?  @default(now()) @db.Timestamptz(6)
+  industries      industries @relation(fields: [industry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pt_industry")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model task_assignees {
+  task_id     String    @db.Uuid
+  user_id     String    @db.Uuid
+  assigned_at DateTime? @default(now()) @db.Timestamptz(6)
+  tasks       Task      @relation(fields: [task_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ta_task")
+  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ta_user")
+
+  @@id([task_id, user_id])
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model users {
+  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email             String            @unique @db.VarChar
+  full_name         String            @db.VarChar
+  avatar_url        String?
+  created_at        DateTime?         @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime?         @default(now()) @db.Timestamptz(6)
+  assets            Asset[]
+  comments          Comment[]
+  task_assignees    task_assignees[]
+  workspace_members WorkspaceMember[]
+}
