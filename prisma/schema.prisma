@@ -4,198 +4,215 @@ generator client {
 
 datasource db {
   provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
-model Workspace {
-  id         String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name       String            @db.VarChar
-  slug       String            @unique @db.VarChar
-  createdAt  DateTime?         @default(now()) @map("created_at") @db.Timestamptz(6)
-  updated_at DateTime?         @default(now()) @db.Timestamptz(6)
-  deleted_at DateTime?         @db.Timestamptz(6)
-  projects   Project[]
-  members    WorkspaceMember[]
+// ==========================================
+// 1. MULTI-TENANCY & USERS (NỀN TẢNG)
+// ==========================================
 
+model Workspace {
+  id        String   @id @default(cuid())
+  name      String
+  slug      String   @unique
+  plan      PlanType @default(FREE) // Quản lý gói (Free, Pro, Enterprise)
+  createdAt DateTime @default(now()) @map("created_at")
+
+  members  WorkspaceMember[]
+  spaces   Space[]
+  
   @@map("workspaces")
 }
 
-model WorkspaceMember {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId String    @map("workspace_id") @db.Uuid
-  userId      String    @map("user_id") @db.Uuid
-  role        String?   @default("member") @db.VarChar
-  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updated_at  DateTime? @default(now()) @db.Timestamptz(6)
-  users       users     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wm_user")
-  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_wm_workspace")
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  fullName     String   @map("full_name")
+  avatarUrl    String?  @map("avatar_url")
+  createdAt    DateTime @default(now()) @map("created_at")
 
-  @@index([userId], map: "idx_workspace_members_user_id")
+  workspaces WorkspaceMember[]
+  
+  @@map("users")
+}
+
+model WorkspaceMember {
+  userId      String      @map("user_id")
+  workspaceId String      @map("workspace_id")
+  role        MemberRole  @default(MEMBER)
+  
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workspaceId])
   @@map("workspace_members")
 }
 
-model Project {
-  id                       String                     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  workspaceId              String                     @map("workspace_id") @db.Uuid
-  industry_id              String?                    @db.Uuid
-  name                     String                     @db.VarChar
-  description              String?
-  status                   String?                    @default("active") @db.VarChar
-  active_modules           Json?                      @default("[\"board\"]")
-  createdAt                DateTime?                  @default(now()) @map("created_at") @db.Timestamptz(6)
-  updated_at               DateTime?                  @default(now()) @db.Timestamptz(6)
-  deleted_at               DateTime?                  @db.Timestamptz(6)
-  custom_field_definitions custom_field_definitions[]
-  lists                    lists[]
-  industries               industries?                @relation(fields: [industry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_p_industry")
-  workspace                Workspace                  @relation(fields: [workspaceId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_p_workspace")
-  tasks                    Task[]
+enum MemberRole { OWNER, ADMIN, MEMBER, GUEST }
+enum PlanType { FREE, PRO, ENTERPRISE }
 
-  @@index([workspaceId], map: "idx_projects_workspace_id")
-  @@map("projects")
+// ==========================================
+// 2. HIERARCHY (CẤU TRÚC PHÂN CẤP)
+// ==========================================
+
+// Space: Nhóm lớn nhất (VD: Phòng Marketing, Phòng HR, Dự án X)
+model Space {
+  id          String   @id @default(cuid())
+  workspaceId String   @map("workspace_id")
+  name        String
+  icon        String?  // Emoji hoặc URL icon
+  color       String?  // Mã màu chủ đạo
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  lists     List[]
+  
+  @@index([workspaceId])
+  @@map("spaces")
 }
 
-model Task {
-  id             String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  projectId      String           @map("project_id") @db.Uuid
-  list_id        String           @db.Uuid
-  title          String           @db.VarChar
-  description    String?
-  position       Int
-  metadata       Json?            @default("{}")
-  due_date       DateTime?        @db.Timestamptz(6)
-  createdAt      DateTime?        @default(now()) @map("created_at") @db.Timestamptz(6)
-  updated_at     DateTime?        @default(now()) @db.Timestamptz(6)
-  deleted_at     DateTime?        @db.Timestamptz(6)
-  assets         Asset[]
-  comments       Comment[]
-  task_assignees task_assignees[]
-  lists          lists            @relation(fields: [list_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_t_list")
-  project        Project          @relation(fields: [projectId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_t_project")
+// List: Chứa các bản ghi (VD: Chiến dịch Q3, Danh sách Ứng viên)
+model List {
+  id        String   @id @default(cuid())
+  spaceId   String   @map("space_id")
+  name      String
+  position  Float    @default(0) // Để kéo thả sắp xếp thứ tự List
+  createdAt DateTime @default(now()) @map("created_at")
 
-  @@index([list_id], map: "idx_tasks_list_id")
-  @@index([metadata], map: "idx_tasks_metadata", type: Gin)
-  @@index([projectId], map: "idx_tasks_project_id")
-  @@map("tasks")
+  space    Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  fields   Field[]  // Các cột (Dynamic Columns)
+  items    Item[]   // Các dòng dữ liệu
+  views    View[]   // Các cách hiển thị (Kanban, Table...)
+  statuses Status[] // Các trạng thái của List này
+  
+  @@index([spaceId])
+  @@map("lists")
 }
 
-model Asset {
-  id          String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId      String    @map("task_id") @db.Uuid
-  uploader_id String    @db.Uuid
-  fileUrl     String    @map("file_url")
-  file_name   String    @db.VarChar
-  fileType    String    @map("file_type") @db.VarChar
-  file_size   Int?
-  version     Int?      @default(1)
-  status      String?   @default("active") @db.VarChar
-  createdAt   DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  deleted_at  DateTime? @db.Timestamptz(6)
-  task        Task      @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_a_task")
-  users       users     @relation(fields: [uploader_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_a_user")
-  comments    Comment[]
+// ==========================================
+// 3. DYNAMIC SCHEMA ENGINE (BỘ MÁY TÙY BIẾN)
+// ==========================================
 
-  @@index([taskId], map: "idx_assets_task_id")
-  @@map("assets")
+// Định nghĩa các "Cột" (Fields) cho List (Giống Airtable)
+model Field {
+  id        String    @id @default(cuid())
+  listId    String    @map("list_id")
+  name      String    // Tên cột (VD: "Ngày sinh", "Doanh thu")
+  type      FieldType // Kiểu dữ liệu
+  config    Json      @default("{}") // Cấu hình riêng (VD: List options cho Dropdown, Min/Max cho Number)
+  position  Float     @default(0)    // Thứ tự hiển thị
+  isHidden  Boolean   @default(false)
+  createdAt DateTime  @default(now()) @map("created_at")
+
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+  
+  @@index([listId])
+  @@map("fields")
 }
 
-model Comment {
-  id            String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  taskId        String    @map("task_id") @db.Uuid
-  assetId       String?   @map("asset_id") @db.Uuid
-  userId        String    @map("user_id") @db.Uuid
-  content       String
-  timestampMark Int?      @map("timestamp_mark")
-  x_coordinate  Decimal?  @db.Decimal
-  y_coordinate  Decimal?  @db.Decimal
-  createdAt     DateTime? @default(now()) @map("created_at") @db.Timestamptz(6)
-  updated_at    DateTime? @default(now()) @db.Timestamptz(6)
-  deleted_at    DateTime? @db.Timestamptz(6)
-  asset         Asset?    @relation(fields: [assetId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_c_asset")
-  task          Task      @relation(fields: [taskId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_c_task")
-  users         users     @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_c_user")
-
-  @@index([assetId], map: "idx_comments_asset_id")
-  @@index([taskId], map: "idx_comments_task_id")
-  @@map("comments")
+enum FieldType {
+  TEXT
+  NUMBER
+  DATE
+  CHECKBOX
+  SELECT       // Dropdown 1 chọn
+  MULTI_SELECT // Dropdown nhiều chọn
+  USER         // Gán người dùng
+  ATTACHMENT   // File đính kèm
+  RELATION     // Liên kết sang List khác
+  FORMULA      // Công thức tính toán
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model custom_field_definitions {
-  id          String    @id(map: "custom_fields_pkey") @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  project_id  String    @db.Uuid
-  name        String    @db.VarChar
-  field_key   String    @db.VarChar
-  field_type  String    @db.VarChar
-  options     Json?
-  is_required Boolean?  @default(false)
-  created_at  DateTime? @default(now()) @db.Timestamptz(6)
-  projects    Project   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_cf_project")
+// ==========================================
+// 4. WORKFLOW & STATUS ENGINE (LUỒNG TRẠNG THÁI)
+// ==========================================
 
-  @@unique([project_id, field_key], map: "unique_field_key_per_project")
-  @@index([project_id], map: "idx_custom_field_defs_project_id")
+model Status {
+  id        String       @id @default(cuid())
+  listId    String       @map("list_id")
+  name      String       // VD: "Mới", "Đang xử lý", "Thành công"
+  color     String       // Mã màu hex
+  group     StatusGroup  // Nhóm để Kanban biết cột nào là "Done"
+  position  Float        @default(0)
+  
+  list  List   @relation(fields: [listId], references: [id], onDelete: Cascade)
+  items Item[] // Items đang mang status này
+  
+  @@index([listId])
+  @@map("statuses")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model industries {
-  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  name              String              @db.VarChar
-  slug              String              @unique @db.VarChar
-  description       String?
-  created_at        DateTime?           @default(now()) @db.Timestamptz(6)
-  project_templates project_templates[]
-  projects          Project[]
+enum StatusGroup {
+  TODO        // Chưa làm
+  IN_PROGRESS // Đang làm
+  DONE        // Hoàn thành
+  CANCELED    // Hủy bỏ
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model lists {
-  id              String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  project_id      String    @db.Uuid
-  name            String    @db.VarChar
-  position        Int
-  status_category String    @default("to_do") @db.VarChar
-  created_at      DateTime? @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime? @default(now()) @db.Timestamptz(6)
-  deleted_at      DateTime? @db.Timestamptz(6)
-  projects        Project   @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_l_project")
-  tasks           Task[]
+// ==========================================
+// 5. THE CORE DATA (DỮ LIỆU THẬT SỰ)
+// ==========================================
 
-  @@index([project_id], map: "idx_lists_project_id")
+// Item: Một dòng dữ liệu (Task, Lead, Patient, Product...)
+model Item {
+  id        String   @id @default(cuid())
+  listId    String   @map("list_id")
+  
+  // Dữ liệu động lưu ở đây! (Key là Field.id, Value là giá trị)
+  // VD: { "fld_123": "Nguyễn Văn A", "fld_456": "2023-10-25", "fld_789": 500000 }
+  data      Json     @default("{}") @db.JsonB 
+  
+  // Các trường cố định (Core fields) để query nhanh và làm tiêu đề
+  title     String   @default("Untitled") 
+  statusId  String?  @map("status_id")
+  
+  // Sắp xếp kéo thả
+  kanbanOrder Float  @default(0) @map("kanban_order")
+  tableOrder  Float  @default(0) @map("table_order")
+  
+  // Audit (Lịch sử)
+  createdBy String?  @map("created_by") // User ID
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  list   List    @relation(fields: [listId], references: [id], onDelete: Cascade)
+  status Status? @relation(fields: [statusId], references: [id], onDelete: SetNull)
+  
+  // Indexes cực kỳ quan trọng cho JSONB và Sắp xếp
+  @@index([listId, statusId])
+  @@index([listId, kanbanOrder])
+  @@index([listId, tableOrder])
+  @@map("items")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model project_templates {
-  id              String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  industry_id     String     @db.Uuid
-  name            String     @db.VarChar
-  default_modules Json?      @default("[]")
-  default_lists   Json?
-  default_fields  Json?
-  created_at      DateTime?  @default(now()) @db.Timestamptz(6)
-  updated_at      DateTime?  @default(now()) @db.Timestamptz(6)
-  industries      industries @relation(fields: [industry_id], references: [id], onDelete: NoAction, onUpdate: NoAction, map: "fk_pt_industry")
+// ==========================================
+// 6. MULTI-VIEW ENGINE (ĐA GIAO DIỆN)
+// ==========================================
+
+// View: Cách hiển thị dữ liệu (Table, Kanban, Calendar...)
+model View {
+  id        String   @id @default(cuid())
+  listId    String   @map("list_id")
+  name      String   // VD: "Kanban Sales", "Table HR"
+  type      ViewType 
+  
+  // Lưu bộ lọc, sắp xếp, nhóm, cột nào được ẩn/hiện
+  // VD: { "filters": [...], "sorts": [...], "hiddenFields": ["fld_123"] }
+  config    Json     @default("{}") @db.JsonB 
+  position  Float    @default(0)
+  
+  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
+  
+  @@index([listId])
+  @@map("views")
 }
 
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model task_assignees {
-  task_id     String    @db.Uuid
-  user_id     String    @db.Uuid
-  assigned_at DateTime? @default(now()) @db.Timestamptz(6)
-  tasks       Task      @relation(fields: [task_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ta_task")
-  users       users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ta_user")
-
-  @@id([task_id, user_id])
-}
-
-/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
-model users {
-  id                String            @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  email             String            @unique @db.VarChar
-  full_name         String            @db.VarChar
-  avatar_url        String?
-  created_at        DateTime?         @default(now()) @db.Timestamptz(6)
-  updated_at        DateTime?         @default(now()) @db.Timestamptz(6)
-  assets            Asset[]
-  comments          Comment[]
-  task_assignees    task_assignees[]
-  workspace_members WorkspaceMember[]
+enum ViewType {
+  TABLE
+  KANBAN
+  CALENDAR
+  GANTT
+  TIMELINE
+  FORM // Dùng để tạo link public cho khách điền form
 }

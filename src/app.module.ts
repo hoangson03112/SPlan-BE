@@ -1,15 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
-import { ProjectsModule } from './projects/projects.module';
-import { PrismaModule } from './prisma/prisma.module';
+import { validate } from './config/env.validation';
+import { DatabaseModule } from './database/database.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      validate, // Bắt buộc validate env trước khi chạy
     }),
-    PrismaModule,
-    ProjectsModule,
+    DatabaseModule,
+    // Sau này sẽ import AuthModule, IssueModule vào đây
   ],
 })
 export class AppModule {}
