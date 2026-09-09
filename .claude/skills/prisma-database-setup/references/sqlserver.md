@@ -27,14 +27,14 @@ generator client {
 In `prisma.config.ts`:
 
 ```typescript
-import { defineConfig, env } from 'prisma/config'
+import { defineConfig, env } from 'prisma/config';
 
 export default defineConfig({
   schema: 'prisma/schema.prisma',
   datasource: {
     url: env('DATABASE_URL'),
   },
-})
+});
 ```
 
 ## 3. Environment Variable
@@ -59,15 +59,16 @@ sqlserver://HOST:PORT;database=DB;user=USER;password=PASS;encrypt=true;trustServ
 Use a driver adapter for the standard SQL workflow.
 
 1. Install adapter and driver:
+
    ```bash
    npm install @prisma/adapter-mssql mssql
    ```
 
 2. Instantiate Prisma Client with the adapter:
    ```typescript
-   import 'dotenv/config'
-   import { PrismaClient } from '../generated/client'
-   import { PrismaMssql } from '@prisma/adapter-mssql'
+   import 'dotenv/config';
+   import { PrismaClient } from '../generated/client';
+   import { PrismaMssql } from '@prisma/adapter-mssql';
 
    const adapter = new PrismaMssql({
      server: 'localhost',
@@ -79,16 +80,18 @@ Use a driver adapter for the standard SQL workflow.
        encrypt: true,
        trustServerCertificate: true,
      },
-   })
+   });
 
-   const prisma = new PrismaClient({ adapter })
+   const prisma = new PrismaClient({ adapter });
    ```
 
 ## Common Issues
 
 ### "Login failed for user"
+
 - SQL Server auth vs Windows auth. Prisma typically uses SQL Server authentication (username/password).
 - Ensure TCP/IP is enabled in SQL Server Configuration Manager.
 
 ### "Table not found" (dbo schema)
+
 Prisma assumes `dbo` schema by default. If using another schema, update the model or connection string? SQL Server provider mostly sticks to default schema.

@@ -104,34 +104,37 @@ export default defineConfig({
     directUrl: env('DIRECT_URL'),
     shadowDatabaseUrl: env('SHADOW_DATABASE_URL'),
   },
-})
+});
 ```
 
 ## After Schema Changes
 
 1. Run `prisma generate`:
+
    ```bash
    npx prisma generate
    ```
 
 2. Update imports throughout your codebase:
+
    ```typescript
-   import { PrismaClient } from '../generated/prisma/client'
+   import { PrismaClient } from '../generated/prisma/client';
    ```
 
 3. Update `.gitignore` if you manage this manually:
+
    ```
    /generated/prisma
    ```
 
 4. Replace `Prisma.validator()` with TypeScript `satisfies` when using `prisma-client`:
    ```typescript
-   import { Prisma } from '../generated/prisma/client'
+   import { Prisma } from '../generated/prisma/client';
 
    const userSelect = {
      id: true,
      email: true,
-   } satisfies Prisma.UserSelect
+   } satisfies Prisma.UserSelect;
    ```
 
 ## Generated Entrypoints

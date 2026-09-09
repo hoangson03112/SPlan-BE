@@ -1,15 +1,15 @@
 version: '3.8'
+
 services:
   postgres:
-    image: postgres:16-alpine
-    container_name: jira_postgres
-    restart: always
-    ports:
-      - '5432:5432'
+    image: postgres:16
+    container_name: proflow_postgres
     environment:
-      POSTGRES_USER: jira_admin
-      POSTGRES_PASSWORD: super_secret_password
-      POSTGRES_DB: jira_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: 03112003nM439565
+      POSTGRES_DB: proflow
+    ports:
+      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

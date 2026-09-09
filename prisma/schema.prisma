@@ -7,212 +7,160 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ==========================================
-// 1. MULTI-TENANCY & USERS (NỀN TẢNG)
-// ==========================================
-
 model Workspace {
-  id        String   @id @default(cuid())
+  id        String            @id @default(cuid())
   name      String
-  slug      String   @unique
-  plan      PlanType @default(FREE) // Quản lý gói (Free, Pro, Enterprise)
-  createdAt DateTime @default(now()) @map("created_at")
+  slug      String
+  plan      PlanType          @default(FREE)
+  createdAt DateTime          @default(now()) @map("created_at")
+  spaces    Space[]
+  members   WorkspaceMember[]
 
-  members  WorkspaceMember[]
-  spaces   Space[]
-  
   @@map("workspaces")
 }
 
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  passwordHash String   @map("password_hash")
-  fullName     String   @map("full_name")
-  avatarUrl    String?  @map("avatar_url")
-  createdAt    DateTime @default(now()) @map("created_at")
+  id               String            @id @default(uuid())
+  email            String            @unique
+  password         String?
+  name             String?
+  isVerified       Boolean           @default(false)
+  provider         AuthProvider      @default(LOCAL)
+  createdAt        DateTime          @default(now())
+  updatedAt        DateTime          @updatedAt
+  workspaceMembers WorkspaceMember[]
 
-  workspaces WorkspaceMember[]
-  
   @@map("users")
 }
 
 model WorkspaceMember {
-  userId      String      @map("user_id")
-  workspaceId String      @map("workspace_id")
-  role        MemberRole  @default(MEMBER)
-  
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  userId      String     @map("user_id")
+  workspaceId String     @map("workspace_id")
+  role        MemberRole @default(MEMBER)
+  user        User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace   Workspace  @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@id([userId, workspaceId])
   @@map("workspace_members")
 }
 
-enum MemberRole { OWNER, ADMIN, MEMBER, GUEST }
-enum PlanType { FREE, PRO, ENTERPRISE }
-
-// ==========================================
-// 2. HIERARCHY (CẤU TRÚC PHÂN CẤP)
-// ==========================================
-
-// Space: Nhóm lớn nhất (VD: Phòng Marketing, Phòng HR, Dự án X)
 model Space {
-  id          String   @id @default(cuid())
-  workspaceId String   @map("workspace_id")
+  id          String    @id @default(cuid())
+  workspaceId String    @map("workspace_id")
   name        String
-  icon        String?  // Emoji hoặc URL icon
-  color       String?  // Mã màu chủ đạo
-  createdAt   DateTime @default(now()) @map("created_at")
+  icon        String?
+  color       String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  lists       List[]
+  workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  lists     List[]
-  
-  @@index([workspaceId])
   @@map("spaces")
 }
 
-// List: Chứa các bản ghi (VD: Chiến dịch Q3, Danh sách Ứng viên)
 model List {
   id        String   @id @default(cuid())
   spaceId   String   @map("space_id")
   name      String
-  position  Float    @default(0) // Để kéo thả sắp xếp thứ tự List
+  position  Float    @default(0)
   createdAt DateTime @default(now()) @map("created_at")
+  fields    Field[]
+  items     Item[]
+  space     Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
+  statuses  Status[]
+  views     View[]
 
-  space    Space    @relation(fields: [spaceId], references: [id], onDelete: Cascade)
-  fields   Field[]  // Các cột (Dynamic Columns)
-  items    Item[]   // Các dòng dữ liệu
-  views    View[]   // Các cách hiển thị (Kanban, Table...)
-  statuses Status[] // Các trạng thái của List này
-  
-  @@index([spaceId])
   @@map("lists")
 }
 
-// ==========================================
-// 3. DYNAMIC SCHEMA ENGINE (BỘ MÁY TÙY BIẾN)
-// ==========================================
-
-// Định nghĩa các "Cột" (Fields) cho List (Giống Airtable)
 model Field {
   id        String    @id @default(cuid())
   listId    String    @map("list_id")
-  name      String    // Tên cột (VD: "Ngày sinh", "Doanh thu")
-  type      FieldType // Kiểu dữ liệu
-  config    Json      @default("{}") // Cấu hình riêng (VD: List options cho Dropdown, Min/Max cho Number)
-  position  Float     @default(0)    // Thứ tự hiển thị
-  isHidden  Boolean   @default(false)
+  name      String
+  type      FieldType
+  config    Json      @default("{}")
+  position  Float     @default(0)
+  isHidden  Boolean   @default(false) @map("isHidden")
   createdAt DateTime  @default(now()) @map("created_at")
+  list      List      @relation(fields: [listId], references: [id], onDelete: Cascade)
 
-  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
-  
-  @@index([listId])
   @@map("fields")
+}
+
+model Status {
+  id       String      @id @default(cuid())
+  listId   String      @map("list_id")
+  name     String
+  color    String
+  group    StatusGroup
+  position Float       @default(0)
+  items    Item[]
+  list     List        @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@map("statuses")
+}
+
+model Item {
+  id          String   @id @default(cuid())
+  listId      String   @map("list_id")
+  data        Json     @default("{}")
+  title       String   @default("Untitled")
+  statusId    String?  @map("status_id")
+  kanbanOrder Float    @default(0) @map("kanban_order")
+  tableOrder  Float    @default(0) @map("table_order")
+  createdBy   String?  @map("created_by")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+  list        List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+  status      Status?  @relation(fields: [statusId], references: [id])
+
+  @@map("items")
+}
+
+model View {
+  id       String   @id @default(cuid())
+  listId   String   @map("list_id")
+  name     String
+  type     ViewType
+  config   Json     @default("{}")
+  position Float    @default(0)
+  list     List     @relation(fields: [listId], references: [id], onDelete: Cascade)
+
+  @@map("views")
+}
+
+enum PlanType {
+  FREE
+  PRO
+  ENTERPRISE
+}
+
+enum MemberRole {
+  MEMBER
+  ADMIN
+  OWNER
 }
 
 enum FieldType {
   TEXT
   NUMBER
+  SELECT
   DATE
   CHECKBOX
-  SELECT       // Dropdown 1 chọn
-  MULTI_SELECT // Dropdown nhiều chọn
-  USER         // Gán người dùng
-  ATTACHMENT   // File đính kèm
-  RELATION     // Liên kết sang List khác
-  FORMULA      // Công thức tính toán
-}
-
-// ==========================================
-// 4. WORKFLOW & STATUS ENGINE (LUỒNG TRẠNG THÁI)
-// ==========================================
-
-model Status {
-  id        String       @id @default(cuid())
-  listId    String       @map("list_id")
-  name      String       // VD: "Mới", "Đang xử lý", "Thành công"
-  color     String       // Mã màu hex
-  group     StatusGroup  // Nhóm để Kanban biết cột nào là "Done"
-  position  Float        @default(0)
-  
-  list  List   @relation(fields: [listId], references: [id], onDelete: Cascade)
-  items Item[] // Items đang mang status này
-  
-  @@index([listId])
-  @@map("statuses")
 }
 
 enum StatusGroup {
-  TODO        // Chưa làm
-  IN_PROGRESS // Đang làm
-  DONE        // Hoàn thành
-  CANCELED    // Hủy bỏ
-}
-
-// ==========================================
-// 5. THE CORE DATA (DỮ LIỆU THẬT SỰ)
-// ==========================================
-
-// Item: Một dòng dữ liệu (Task, Lead, Patient, Product...)
-model Item {
-  id        String   @id @default(cuid())
-  listId    String   @map("list_id")
-  
-  // Dữ liệu động lưu ở đây! (Key là Field.id, Value là giá trị)
-  // VD: { "fld_123": "Nguyễn Văn A", "fld_456": "2023-10-25", "fld_789": 500000 }
-  data      Json     @default("{}") @db.JsonB 
-  
-  // Các trường cố định (Core fields) để query nhanh và làm tiêu đề
-  title     String   @default("Untitled") 
-  statusId  String?  @map("status_id")
-  
-  // Sắp xếp kéo thả
-  kanbanOrder Float  @default(0) @map("kanban_order")
-  tableOrder  Float  @default(0) @map("table_order")
-  
-  // Audit (Lịch sử)
-  createdBy String?  @map("created_by") // User ID
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
-
-  list   List    @relation(fields: [listId], references: [id], onDelete: Cascade)
-  status Status? @relation(fields: [statusId], references: [id], onDelete: SetNull)
-  
-  // Indexes cực kỳ quan trọng cho JSONB và Sắp xếp
-  @@index([listId, statusId])
-  @@index([listId, kanbanOrder])
-  @@index([listId, tableOrder])
-  @@map("items")
-}
-
-// ==========================================
-// 6. MULTI-VIEW ENGINE (ĐA GIAO DIỆN)
-// ==========================================
-
-// View: Cách hiển thị dữ liệu (Table, Kanban, Calendar...)
-model View {
-  id        String   @id @default(cuid())
-  listId    String   @map("list_id")
-  name      String   // VD: "Kanban Sales", "Table HR"
-  type      ViewType 
-  
-  // Lưu bộ lọc, sắp xếp, nhóm, cột nào được ẩn/hiện
-  // VD: { "filters": [...], "sorts": [...], "hiddenFields": ["fld_123"] }
-  config    Json     @default("{}") @db.JsonB 
-  position  Float    @default(0)
-  
-  list List @relation(fields: [listId], references: [id], onDelete: Cascade)
-  
-  @@index([listId])
-  @@map("views")
+  TODO
+  IN_PROGRESS
+  DONE
 }
 
 enum ViewType {
   TABLE
   KANBAN
-  CALENDAR
-  GANTT
-  TIMELINE
-  FORM // Dùng để tạo link public cho khách điền form
+  LIST
+}
+
+enum AuthProvider {
+  LOCAL
+  GOOGLE
 }

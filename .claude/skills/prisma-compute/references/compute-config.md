@@ -37,14 +37,14 @@ When a config is discovered, its directory becomes the Compute project directory
 Import `defineComputeConfig` from `@prisma/compute-sdk/config`. The CLI aliases this helper when loading the config, so the command can evaluate the config without a local SDK install solely for runtime loading.
 
 ```typescript
-import { defineComputeConfig } from "@prisma/compute-sdk/config";
+import { defineComputeConfig } from '@prisma/compute-sdk/config';
 
 export default defineComputeConfig({
   app: {
-    name: "api",
-    framework: "hono",
+    name: 'api',
+    framework: 'hono',
     httpPort: 8080,
-    env: ".env",
+    env: '.env',
   },
 });
 ```
@@ -62,27 +62,27 @@ Do not define both. Besides `app`/`apps`, the only other allowed top-level key i
 
 Each app target accepts:
 
-| Field | Meaning |
-|-------|---------|
-| `name` | Deployed app name. Defaults to the `apps` key, then CLI inference. |
-| `region` | Compute region id used only when deploy creates a new app. Existing apps keep their current region. |
-| `root` | App directory relative to the config file. Defaults to the config directory. |
-| `framework` | Deploy framework: `nextjs`, `nuxt`, `astro`, `hono`, `nestjs`, `tanstack-start`, `custom`, or `bun`. |
-| `entry` | Entrypoint path for Bun/Hono-style deploys, relative to the app root. |
-| `httpPort` | Deployed HTTP port. Use this for fixed-port apps. |
-| `env` | Dotenv file path string, or `{ file, vars }`. Paths resolve from the config directory. |
-| `build` | `{ command, outputDirectory, entrypoint }`. Present means the config owns build settings for that target. |
+| Field       | Meaning                                                                                                   |
+| ----------- | --------------------------------------------------------------------------------------------------------- |
+| `name`      | Deployed app name. Defaults to the `apps` key, then CLI inference.                                        |
+| `region`    | Compute region id used only when deploy creates a new app. Existing apps keep their current region.       |
+| `root`      | App directory relative to the config file. Defaults to the config directory.                              |
+| `framework` | Deploy framework: `nextjs`, `nuxt`, `astro`, `hono`, `nestjs`, `tanstack-start`, `custom`, or `bun`.      |
+| `entry`     | Entrypoint path for Bun/Hono-style deploys, relative to the app root.                                     |
+| `httpPort`  | Deployed HTTP port. Use this for fixed-port apps.                                                         |
+| `env`       | Dotenv file path string, or `{ file, vars }`. Paths resolve from the config directory.                    |
+| `build`     | `{ command, outputDirectory, entrypoint }`. Present means the config owns build settings for that target. |
 
 `env` examples:
 
 ```typescript
 export default defineComputeConfig({
   app: {
-    framework: "nextjs",
+    framework: 'nextjs',
     env: {
-      file: [".env", ".env.production"],
+      file: ['.env', '.env.production'],
       vars: {
-        NODE_ENV: "production",
+        NODE_ENV: 'production',
       },
     },
   },
@@ -96,10 +96,10 @@ Do not put secrets directly in committed `vars`. Keep secret values in platform 
 ```typescript
 export default defineComputeConfig({
   app: {
-    framework: "nextjs",
+    framework: 'nextjs',
     build: {
-      command: "pnpm build",
-      outputDirectory: ".next/standalone",
+      command: 'pnpm build',
+      outputDirectory: '.next/standalone',
     },
   },
 });
@@ -112,11 +112,11 @@ For a custom or prebuilt artifact, make the deploy target explicit:
 ```typescript
 export default defineComputeConfig({
   app: {
-    framework: "custom",
+    framework: 'custom',
     build: {
-      command: "npm run build",
-      outputDirectory: "build",
-      entrypoint: "handler.js",
+      command: 'npm run build',
+      outputDirectory: 'build',
+      entrypoint: 'handler.js',
     },
   },
 });
@@ -131,34 +131,34 @@ A config `build` block is accepted for every supported framework: the config-bac
 For monorepos, put `prisma.compute.ts` at the repo or workspace root and use `apps`. This keeps project binding and local `.prisma/` state at the repo root while each app builds from its own `root`.
 
 ```typescript
-import { defineComputeConfig } from "@prisma/compute-sdk/config";
+import { defineComputeConfig } from '@prisma/compute-sdk/config';
 
 export default defineComputeConfig({
   apps: {
     web: {
-      root: "apps/web",
-      framework: "nextjs",
-      env: "apps/web/.env",
+      root: 'apps/web',
+      framework: 'nextjs',
+      env: 'apps/web/.env',
     },
     api: {
-      root: "apps/api",
-      framework: "hono",
-      entry: "src/index.ts",
+      root: 'apps/api',
+      framework: 'hono',
+      entry: 'src/index.ts',
       httpPort: 8080,
       env: {
-        file: "apps/api/.env",
+        file: 'apps/api/.env',
         vars: {
-          LOG_LEVEL: "info",
+          LOG_LEVEL: 'info',
         },
       },
     },
     frontend: {
-      root: "apps/frontend",
-      framework: "custom",
+      root: 'apps/frontend',
+      framework: 'custom',
       build: {
-        command: "pnpm --filter frontend build",
-        outputDirectory: "dist/server",
-        entrypoint: "index.mjs",
+        command: 'pnpm --filter frontend build',
+        outputDirectory: 'dist/server',
+        entrypoint: 'index.mjs',
       },
     },
   },
