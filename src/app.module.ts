@@ -6,6 +6,7 @@ import { PrismaModule } from './prisma/prisma.module.js';
 import { AuthModule } from './module/auth/auth.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor.js';
+import { WorkspaceModule } from './module/workspace/workspace.module.js';
 
 @Module({
   imports: [
@@ -15,6 +16,7 @@ import { TransformInterceptor } from './common/interceptors/transform.intercepto
     }),
     PrismaModule,
     AuthModule,
+    WorkspaceModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

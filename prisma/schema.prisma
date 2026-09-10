@@ -10,7 +10,7 @@ datasource db {
 model Workspace {
   id        String            @id @default(cuid())
   name      String
-  slug      String
+  slug      String            @unique
   plan      PlanType          @default(FREE)
   createdAt DateTime          @default(now()) @map("created_at")
   spaces    Space[]

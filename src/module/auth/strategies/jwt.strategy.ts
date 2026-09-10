@@ -1,8 +1,18 @@
+/* eslint-disable @typescript-eslint/no-unsafe-member-access */
+/* eslint-disable @typescript-eslint/no-unsafe-call */
+/* eslint-disable @typescript-eslint/no-unsafe-assignment */
 import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PassportStrategy } from '@nestjs/passport';
+import type { Request } from 'express';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { PrismaService } from '../../../prisma/prisma.service.js';
+
+interface RequestWithCookies extends Request {
+  cookies: {
+    access_token?: string;
+  };
+}
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -11,15 +21,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     private readonly prisma: PrismaService,
   ) {
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(), // Lấy token từ header "Authorization: Bearer xxx"
-      ignoreExpiration: false,
-      secretOrKey: configService.get<string>('JWT_SECRET'),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (request: RequestWithCookies) => request?.cookies?.access_token ?? null,
+      ]),
+      secretOrKey: configService.getOrThrow<string>('JWT_ACCESS_SECRET'),
     });
   }
 
-  // Hàm này tự động chạy mỗi khi có request có token
-  async validate(payload: { sub: string; email: string }) {
-    // Kiểm tra User có thật sự tồn tại trong DB không
+  async validate(payload: { sub: string }) {
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },
     });
@@ -30,10 +39,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       );
     }
 
-    // Gán payload vào req.user để controller/guard dùng
     return {
       id: user.id,
-      email: user.email,
     };
   }
 }
