@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InviteMembersDto, WorkspaceDto } from './dto/workspace.dto.js';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import slugify from 'slugify';
@@ -42,17 +42,79 @@ export class WorkspaceService {
     }
   }
   async getWorkspacesOfMe(userId: string) {
-    const workspaces = await this.prisma.workspace.findMany({
+    const memberships = await this.prisma.workspaceMember.findMany({
+      where: { userId },
+      include: { workspace: true },
+    });
+
+    return await Promise.all(
+      memberships.map(async ({ workspace, role }) => {
+        const [boardsCount, tasksCount, completedTasksCount] =
+          await Promise.all([
+            this.prisma.space.count({
+              where: { workspaceId: workspace.id },
+            }),
+            this.prisma.item.count({
+              where: { list: { space: { workspaceId: workspace.id } } },
+            }),
+            this.prisma.item.count({
+              where: {
+                list: { space: { workspaceId: workspace.id } },
+                status: { group: 'DONE' },
+              },
+            }),
+          ]);
+
+        return {
+          ...workspace,
+          role,
+          boardsCount,
+          tasksCount,
+          completedTasksCount,
+        };
+      }),
+    );
+  }
+
+  async getMembers(workspaceId: string, userId: string) {
+    const member = await this.prisma.workspaceMember.findUnique({
+      where: { userId_workspaceId: { userId, workspaceId } },
+    });
+
+    if (!member) {
+      throw new ForbiddenException('Bạn không thuộc Workspace này.');
+    }
+
+    return await this.prisma.workspaceMember.findMany({
+      where: { workspaceId },
+      include: {
+        user: { select: { id: true, email: true, name: true } },
+      },
+    });
+  }
+  async getWorkspaceBySlug(slug: string, userId: string) {
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { slug },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Không tìm thấy Workspace.');
+    }
+
+    const member = await this.prisma.workspaceMember.findUnique({
       where: {
-        members: {
-          some: {
-            userId,
-          },
+        userId_workspaceId: {
+          userId,
+          workspaceId: workspace.id,
         },
       },
     });
 
-    return workspaces;
+    if (!member) {
+      throw new ForbiddenException('Bạn không thuộc Workspace này.');
+    }
+
+    return workspace;
   }
   async inviteMembers(dto: InviteMembersDto, userId: string) {
     const workspaceMember = await this.prisma.workspaceMember.findFirst({

@@ -48,12 +48,16 @@ model Space {
   id          String    @id @default(cuid())
   workspaceId String    @map("workspace_id")
   name        String
+  slug        String
   icon        String?
   color       String?
+  description String?
+  category    String?   @default("general")
   createdAt   DateTime  @default(now()) @map("created_at")
   lists       List[]
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
+  @@unique([workspaceId, slug])
   @@map("spaces")
 }
 

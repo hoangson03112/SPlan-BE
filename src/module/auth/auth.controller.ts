@@ -38,6 +38,13 @@ export class AuthController {
     return this.authService.getProfile(user.id);
   }
 
+  @Post('logout')
+  logout(@Res({ passthrough: true }) res: Response) {
+    res.clearCookie('access_token');
+    res.clearCookie('refresh_token');
+    return { message: 'Đăng xuất thành công' };
+  }
+
   private setAuthCookies(
     res: Response,
     tokens: { accessToken: string; refreshToken: string },

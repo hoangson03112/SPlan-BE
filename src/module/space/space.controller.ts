@@ -35,6 +35,15 @@ export class SpaceController {
     return this.spaceService.getSpacesByWorkspace(workspaceId, userId);
   }
 
+  @Get('by-slug')
+  async getSpaceBySlug(
+    @Query('workspaceId') workspaceId: string,
+    @Query('slug') slug: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.spaceService.getSpaceBySlug(workspaceId, slug, userId);
+  }
+
   @Get(':id')
   async getSpaceById(
     @Param('id') spaceId: string,

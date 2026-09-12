@@ -3,7 +3,6 @@ import type { Request } from 'express';
 
 export interface AuthenticatedUser {
   id: string;
-  email: string;
 }
 
 interface RequestWithUser extends Request {
@@ -11,8 +10,8 @@ interface RequestWithUser extends Request {
 }
 
 export const CurrentUser = createParamDecorator(
-  (data: unknown, ctx: ExecutionContext): AuthenticatedUser => {
+  (data: keyof AuthenticatedUser | undefined, ctx: ExecutionContext) => {
     const request = ctx.switchToHttp().getRequest<RequestWithUser>();
-    return request.user;
+    return data ? request.user[data] : request.user;
   },
 );

@@ -17,6 +17,14 @@ export class CreateSpaceDto {
   @IsString()
   @IsOptional()
   color?: string;
+
+  @IsString()
+  @IsOptional()
+  description?: string;
+
+  @IsString()
+  @IsOptional()
+  category?: string;
 }
 export class UpdateSpaceDto extends PartialType(
   OmitType(CreateSpaceDto, ['workspaceId'] as const),

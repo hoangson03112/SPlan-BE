@@ -3,6 +3,7 @@ import {
   NotFoundException,
   ForbiddenException,
 } from '@nestjs/common';
+import slugify from 'slugify';
 import { PrismaService } from '../../prisma/prisma.service.js';
 import { CreateSpaceDto, UpdateSpaceDto } from './dto/space.dto.js';
 
@@ -27,16 +28,62 @@ export class SpaceService {
     return member;
   }
 
+  private async generateUniqueSlug(workspaceId: string, name: string) {
+    const base =
+      slugify(name, { lower: true, strict: true, locale: 'vi' }) || 'space';
+
+    let slug = base;
+    let suffix = 1;
+    while (
+      await this.prisma.space.findUnique({
+        where: { workspaceId_slug: { workspaceId, slug } },
+      })
+    ) {
+      suffix += 1;
+      slug = `${base}-${suffix}`;
+    }
+
+    return slug;
+  }
+
   async createSpace(dto: CreateSpaceDto, userId: string) {
     await this.checkWorkspaceMembership(dto.workspaceId, userId);
+    const slug = await this.generateUniqueSlug(dto.workspaceId, dto.name);
 
-    return await this.prisma.space.create({
-      data: {
-        workspaceId: dto.workspaceId,
-        name: dto.name,
-        icon: dto.icon,
-        color: dto.color,
-      },
+    return await this.prisma.$transaction(async (tx) => {
+      const space = await tx.space.create({
+        data: {
+          workspaceId: dto.workspaceId,
+          name: dto.name,
+          slug,
+          icon: dto.icon,
+          color: dto.color,
+          description: dto.description,
+          category: dto.category,
+        },
+      });
+
+      // Every Space gets one hidden default List, whose Statuses are the
+      // Kanban board's columns and whose Items are the board's tasks.
+      const list = await tx.list.create({
+        data: {
+          spaceId: space.id,
+          name: space.name,
+        },
+      });
+
+      await tx.status.createMany({
+        data: [
+          { listId: list.id, name: 'Cần làm', color: '#64748b', group: 'TODO', position: 0 },
+          { listId: list.id, name: 'Đang thực hiện', color: '#3b82f6', group: 'IN_PROGRESS', position: 1 },
+          { listId: list.id, name: 'Hoàn tất', color: '#10b981', group: 'DONE', position: 2 },
+        ],
+      });
+
+      return await tx.space.findUniqueOrThrow({
+        where: { id: space.id },
+        include: { lists: true },
+      });
     });
   }
 
@@ -57,6 +104,21 @@ export class SpaceService {
       },
       orderBy: { createdAt: 'asc' },
     });
+  }
+
+  async getSpaceBySlug(workspaceId: string, slug: string, userId: string) {
+    await this.checkWorkspaceMembership(workspaceId, userId);
+
+    const space = await this.prisma.space.findUnique({
+      where: { workspaceId_slug: { workspaceId, slug } },
+      include: { lists: true },
+    });
+
+    if (!space) {
+      throw new NotFoundException('Không tìm thấy Space.');
+    }
+
+    return space;
   }
 
   async getSpaceById(spaceId: string, userId: string) {
@@ -87,7 +149,7 @@ export class SpaceService {
     });
   }
 
-  // 5. Xóa Space (Chỉ OWNER hoặc ADMIN mới có quyền xóa)
+  // 5. Xóa Space (Chỉ OWNER mới có quyền xóa)
   async deleteSpace(spaceId: string, userId: string) {
     const space = await this.getSpaceById(spaceId, userId);
     const member = await this.checkWorkspaceMembership(
@@ -95,10 +157,8 @@ export class SpaceService {
       userId,
     );
 
-    if (member.role === 'MEMBER') {
-      throw new ForbiddenException(
-        'Chỉ OWNER hoặc ADMIN mới có quyền xóa Space.',
-      );
+    if (member.role !== 'OWNER') {
+      throw new ForbiddenException('Chỉ OWNER mới có quyền xóa Space.');
     }
 
     return await this.prisma.space.delete({

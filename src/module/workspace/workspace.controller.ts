@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Post, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Param, Post, UseGuards } from '@nestjs/common';
 import { WorkspaceService } from './workspace.service.js';
 import { InviteMembersDto, WorkspaceDto } from './dto/workspace.dto.js';
 import { CurrentUser } from '../auth/decorators/current-user.decorator.js';
@@ -29,5 +29,22 @@ export class WorkspaceController {
     @CurrentUser() user: { id: string },
   ) {
     return await this.workspaceService.inviteMembers(dto, user.id);
+  }
+  @Get(':slug')
+  @UseGuards(AuthGuard('jwt'))
+  async getWorkspaceBySlug(
+    @Param('slug') slug: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.workspaceService.getWorkspaceBySlug(slug, userId);
+  }
+
+  @Get(':workspaceId/members')
+  @UseGuards(AuthGuard('jwt'))
+  async getMembers(
+    @Param('workspaceId') workspaceId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.workspaceService.getMembers(workspaceId, userId);
   }
 }

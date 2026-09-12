@@ -7,6 +7,9 @@ import { AuthModule } from './module/auth/auth.module.js';
 import { AllExceptionsFilter } from './common/filters/http-exception.filter.js';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor.js';
 import { WorkspaceModule } from './module/workspace/workspace.module.js';
+import { SpaceModule } from './module/space/space.module.js';
+import { ItemModule } from './module/item/item.module.js';
+import { StatusModule } from './module/status/status.module.js';
 
 @Module({
   imports: [
@@ -17,6 +20,9 @@ import { WorkspaceModule } from './module/workspace/workspace.module.js';
     PrismaModule,
     AuthModule,
     WorkspaceModule,
+    SpaceModule,
+    ItemModule,
+    StatusModule,
   ],
   providers: [
     { provide: APP_FILTER, useClass: AllExceptionsFilter },

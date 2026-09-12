@@ -18,7 +18,7 @@ async function bootstrap() {
   );
 
   app.enableCors({
-    origin: ['http://localhost:3000', 'http://localhost:5173'], // Port của React/Vite
+    origin: ['http://localhost:4000'], // Port của React/Vite
     credentials: true,
   });
 
