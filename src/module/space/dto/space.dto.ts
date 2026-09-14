@@ -12,6 +12,10 @@ export class CreateSpaceDto {
 
   @IsString()
   @IsOptional()
+  key?: string;
+
+  @IsString()
+  @IsOptional()
   icon?: string;
 
   @IsString()

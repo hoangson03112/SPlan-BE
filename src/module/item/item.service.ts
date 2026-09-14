@@ -38,28 +38,57 @@ export class ItemService {
   }
 
   async createItem(dto: CreateItemDto, userId: string) {
-    await this.checkListAccess(dto.listId, userId);
+    const list = await this.checkListAccess(dto.listId, userId);
 
-    return await this.prisma.item.create({
-      data: {
-        listId: dto.listId,
-        title: dto.title,
-        data: (dto.data ?? {}) as Prisma.InputJsonValue,
-        statusId: dto.statusId,
-        kanbanOrder: dto.kanbanOrder,
-        tableOrder: dto.tableOrder,
-        createdBy: userId,
-      },
+    return await this.prisma.$transaction(async (tx) => {
+      // Jira-style issue code ("MKT-42") — increment the space's counter and
+      // stamp the new number on this item. Scoped to the Space (not the
+      // List) since a Space is the "project" a user thinks in terms of.
+      const space = await tx.space.update({
+        where: { id: list.spaceId },
+        data: { itemSeq: { increment: 1 } },
+      });
+
+      return await tx.item.create({
+        data: {
+          listId: dto.listId,
+          number: space.itemSeq,
+          title: dto.title,
+          data: (dto.data ?? {}) as Prisma.InputJsonValue,
+          statusId: dto.statusId,
+          kanbanOrder: dto.kanbanOrder,
+          tableOrder: dto.tableOrder,
+          createdBy: userId,
+        },
+      });
     });
   }
 
-  async getItemsByList(listId: string, userId: string) {
+  /** `take`/`skip` are optional so existing callers that want every item on
+   * the board (e.g. the Kanban view, which needs the full set to build its
+   * columns) keep getting the same plain array back, unpaginated. Passing
+   * them slices the result and also returns the total count, so the
+   * response body shape never changes based on the caller's choice. */
+  async getItemsByList(
+    listId: string,
+    userId: string,
+    pagination?: { take?: number; skip?: number },
+  ) {
     await this.checkListAccess(listId, userId);
 
-    return await this.prisma.item.findMany({
-      where: { listId },
-      orderBy: { tableOrder: 'asc' },
-    });
+    const [items, total] = await Promise.all([
+      this.prisma.item.findMany({
+        where: { listId },
+        orderBy: { tableOrder: 'asc' },
+        take: pagination?.take,
+        skip: pagination?.skip,
+      }),
+      pagination?.take !== undefined || pagination?.skip !== undefined
+        ? this.prisma.item.count({ where: { listId } })
+        : null,
+    ]);
+
+    return { items, total };
   }
 
   async getItemById(itemId: string, userId: string) {

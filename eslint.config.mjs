@@ -32,4 +32,16 @@ export default tseslint.config(
       'prettier/prettier': ['error', { endOfLine: 'auto' }],
     },
   },
+  {
+    // Test files lean on loosely-typed mocks (jest.fn(), `as any` casts,
+    // supertest's `any`-typed request builders) by nature — the strict
+    // type-checked rules mostly just flag the mocking itself, not real bugs.
+    files: ['**/*.spec.ts', '**/*.e2e-spec.ts'],
+    rules: {
+      '@typescript-eslint/no-unsafe-assignment': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-argument': 'off',
+      '@typescript-eslint/require-await': 'off',
+    },
+  },
 );

@@ -31,8 +31,17 @@ export class ItemController {
   async getItemsByList(
     @Query('listId') listId: string,
     @CurrentUser('id') userId: string,
+    @Query('take') take?: string,
+    @Query('skip') skip?: string,
   ) {
-    return this.itemService.getItemsByList(listId, userId);
+    const pagination =
+      take !== undefined || skip !== undefined
+        ? {
+            take: take !== undefined ? Number(take) : undefined,
+            skip: skip !== undefined ? Number(skip) : undefined,
+          }
+        : undefined;
+    return this.itemService.getItemsByList(listId, userId, pagination);
   }
 
   @Get(':id')

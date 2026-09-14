@@ -15,20 +15,24 @@ model Workspace {
   createdAt DateTime          @default(now()) @map("created_at")
   spaces    Space[]
   members   WorkspaceMember[]
+  type      WorkspaceType     @default(PERSONAL)
 
   @@map("workspaces")
 }
 
 model User {
-  id               String            @id @default(uuid())
-  email            String            @unique
-  password         String?
-  name             String?
-  isVerified       Boolean           @default(false)
-  provider         AuthProvider      @default(LOCAL)
-  createdAt        DateTime          @default(now())
-  updatedAt        DateTime          @updatedAt
-  workspaceMembers WorkspaceMember[]
+  id                   String            @id @default(uuid())
+  email                String            @unique
+  password             String?
+  name                 String?
+  isVerified           Boolean           @default(false)
+  provider             AuthProvider      @default(LOCAL)
+  tokenVersion         Int               @default(0) @map("token_version")
+  resetPasswordToken   String?           @map("reset_password_token")
+  resetPasswordExpires DateTime?         @map("reset_password_expires")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+  workspaceMembers     WorkspaceMember[]
 
   @@map("users")
 }
@@ -47,8 +51,11 @@ model WorkspaceMember {
 model Space {
   id          String    @id @default(cuid())
   workspaceId String    @map("workspace_id")
+  isDefault   Boolean   @default(false) @map("is_default")
   name        String
   slug        String
+  key         String
+  itemSeq     Int       @default(0) @map("item_seq")
   icon        String?
   color       String?
   description String?
@@ -58,6 +65,7 @@ model Space {
   workspace   Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
 
   @@unique([workspaceId, slug])
+  @@unique([workspaceId, key])
   @@map("spaces")
 }
 
@@ -106,6 +114,7 @@ model Status {
 model Item {
   id          String   @id @default(cuid())
   listId      String   @map("list_id")
+  number      Int?
   data        Json     @default("{}")
   title       String   @default("Untitled")
   statusId    String?  @map("status_id")
@@ -167,4 +176,10 @@ enum ViewType {
 enum AuthProvider {
   LOCAL
   GOOGLE
+}
+
+enum WorkspaceType {
+  PERSONAL
+  TEAM
+  ENTERPRISE
 }

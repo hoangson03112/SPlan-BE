@@ -46,9 +46,55 @@ export class SpaceService {
     return slug;
   }
 
+  // A short, uppercase project key like Jira's "MKT" — derived from the
+  // initials of the space's name (falling back to its first letters when
+  // there's only one word), then de-duplicated within the workspace.
+  private async generateUniqueKey(
+    workspaceId: string,
+    name: string,
+    explicit?: string,
+  ) {
+    const words = (explicit ?? name)
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .toUpperCase()
+      .match(/[A-Z0-9]+/g);
+
+    let base: string;
+    if (!words || words.length === 0) {
+      base = 'SP';
+    } else if (words.length === 1) {
+      base = words[0].slice(0, 4);
+    } else {
+      base = words
+        .map((w) => w[0])
+        .join('')
+        .slice(0, 4);
+    }
+    if (base.length < 2) base = base.padEnd(2, 'X');
+
+    let key = base;
+    let suffix = 1;
+    while (
+      await this.prisma.space.findUnique({
+        where: { workspaceId_key: { workspaceId, key } },
+      })
+    ) {
+      suffix += 1;
+      key = `${base}${suffix}`;
+    }
+
+    return key;
+  }
+
   async createSpace(dto: CreateSpaceDto, userId: string) {
     await this.checkWorkspaceMembership(dto.workspaceId, userId);
     const slug = await this.generateUniqueSlug(dto.workspaceId, dto.name);
+    const key = await this.generateUniqueKey(
+      dto.workspaceId,
+      dto.name,
+      dto.key,
+    );
 
     return await this.prisma.$transaction(async (tx) => {
       const space = await tx.space.create({
@@ -56,6 +102,7 @@ export class SpaceService {
           workspaceId: dto.workspaceId,
           name: dto.name,
           slug,
+          key,
           icon: dto.icon,
           color: dto.color,
           description: dto.description,
@@ -63,8 +110,6 @@ export class SpaceService {
         },
       });
 
-      // Every Space gets one hidden default List, whose Statuses are the
-      // Kanban board's columns and whose Items are the board's tasks.
       const list = await tx.list.create({
         data: {
           spaceId: space.id,
@@ -74,9 +119,27 @@ export class SpaceService {
 
       await tx.status.createMany({
         data: [
-          { listId: list.id, name: 'Cần làm', color: '#64748b', group: 'TODO', position: 0 },
-          { listId: list.id, name: 'Đang thực hiện', color: '#3b82f6', group: 'IN_PROGRESS', position: 1 },
-          { listId: list.id, name: 'Hoàn tất', color: '#10b981', group: 'DONE', position: 2 },
+          {
+            listId: list.id,
+            name: 'Cần làm',
+            color: '#64748b',
+            group: 'TODO',
+            position: 0,
+          },
+          {
+            listId: list.id,
+            name: 'Đang thực hiện',
+            color: '#3b82f6',
+            group: 'IN_PROGRESS',
+            position: 1,
+          },
+          {
+            listId: list.id,
+            name: 'Hoàn tất',
+            color: '#10b981',
+            group: 'DONE',
+            position: 2,
+          },
         ],
       });
 
@@ -90,7 +153,7 @@ export class SpaceService {
   async getSpacesByWorkspace(workspaceId: string, userId: string) {
     await this.checkWorkspaceMembership(workspaceId, userId);
 
-    return await this.prisma.space.findMany({
+    const spaces = await this.prisma.space.findMany({
       where: { workspaceId },
       include: {
         lists: {
@@ -104,6 +167,24 @@ export class SpaceService {
       },
       orderBy: { createdAt: 'asc' },
     });
+
+    return await Promise.all(
+      spaces.map(async (space) => {
+        const [itemsCount, completedItemsCount] = await Promise.all([
+          this.prisma.item.count({
+            where: { list: { spaceId: space.id } },
+          }),
+          this.prisma.item.count({
+            where: {
+              list: { spaceId: space.id },
+              status: { group: 'DONE' },
+            },
+          }),
+        ]);
+
+        return { ...space, itemsCount, completedItemsCount };
+      }),
+    );
   }
 
   async getSpaceBySlug(workspaceId: string, slug: string, userId: string) {

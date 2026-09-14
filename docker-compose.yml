@@ -5,9 +5,9 @@ services:
     image: postgres:16
     container_name: proflow_postgres
     environment:
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: 03112003nM439565
-      POSTGRES_DB: proflow
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-proflow}
     ports:
       - "5432:5432"
     volumes:

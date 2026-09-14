@@ -2,14 +2,15 @@ import {
   IsIn,
   IsNotEmpty,
   IsNumber,
+  IsObject,
   IsOptional,
   IsString,
 } from 'class-validator';
 import { PartialType, OmitType } from '@nestjs/mapped-types';
 
-const STATUS_GROUPS = ['TODO', 'IN_PROGRESS', 'DONE'] as const;
+const VIEW_TYPES = ['TABLE', 'KANBAN', 'LIST'] as const;
 
-export class CreateStatusDto {
+export class CreateViewDto {
   @IsString()
   @IsNotEmpty()
   listId!: string;
@@ -18,19 +19,18 @@ export class CreateStatusDto {
   @IsNotEmpty()
   name!: string;
 
-  @IsString()
-  @IsOptional()
-  color?: string;
+  @IsIn(VIEW_TYPES)
+  type!: (typeof VIEW_TYPES)[number];
 
-  @IsIn(STATUS_GROUPS)
+  @IsObject()
   @IsOptional()
-  group?: (typeof STATUS_GROUPS)[number];
+  config?: Record<string, unknown>;
 
   @IsNumber()
   @IsOptional()
   position?: number;
 }
 
-export class UpdateStatusDto extends PartialType(
-  OmitType(CreateStatusDto, ['listId'] as const),
+export class UpdateViewDto extends PartialType(
+  OmitType(CreateViewDto, ['listId'] as const),
 ) {}
