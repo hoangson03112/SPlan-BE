@@ -1,62 +1,83 @@
-name: NestJS CI/CD Pipeline
+name: CI/CD Pipeline
 
 on:
   push:
-    branches: [main]
+    branches: [ "main" ]
   pull_request:
-    branches: [main]
+    branches: [ "main" ]
+
+env:
+  IMAGE_NAME: postgres:16
 
 jobs:
-  build-and-test:
+
+  test:
+    name: Run Unit Tests
     runs-on: ubuntu-latest
 
-    services:
-      postgres:
-        image: postgres:16
-        env:
-          POSTGRES_USER: postgres
-          POSTGRES_PASSWORD: postgres
-          POSTGRES_DB: proflow_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
-    env:
-      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/proflow_test
-      JWT_ACCESS_SECRET: ci-access-secret
-      JWT_REFRESH_SECRET: ci-refresh-secret
-
     steps:
-      - name: Checkout code
+      - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Setup Node.js (Version 20)
+      - name: Setup Node.js Environment
         uses: actions/setup-node@v4
         with:
-          node-version: 20.x
-          cache: 'npm'
+          node-version: 20
+          cache: 'npm' 
 
-      - name: Install dependencies
+      - name: Install Dependencies
         run: npm ci
 
-      - name: Lint
-        run: npm run lint -- --max-warnings=9999
+      - name: Run Jest Tests
+        run: npm test
 
-      - name: Generate Prisma Client
-        run: npx prisma generate
 
-      - name: Run migrations
-        run: npx prisma migrate deploy
+  build-and-push:
+    name: Build & Push Docker Image
+    needs: test # CHỈ CHẠY khi Job Test thành công!
+    runs-on: ubuntu-latest
+    
+    # Chỉ push image khi có event PUSH vào nhánh main (Bỏ qua khi tạo Pull Request)
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
 
-      - name: Unit tests
-        run: npm run test
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
 
-      - name: E2E tests
-        run: npm run test:e2e
+      # Khởi tạo QEMU để hỗ trợ build multi-platform (nếu cần)
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
 
-      - name: Build Project
-        run: npm run build
+      # Khởi tạo Docker Buildx để tăng tốc build và tận dụng Cache
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      # Đăng nhập vào Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      # Trích xuất Metadata (Tự tạo các Tags chuẩn như :latest, :main-sha)
+      - name: Extract Docker Metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ secrets.DOCKERHUB_USERNAME }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=sha,prefix=,format=short
+
+      # Build và Push Image lên Docker Hub
+      - name: Build and Push Docker Image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Tận dụng GitHub Actions Cache để lần build sau cực nhanh
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

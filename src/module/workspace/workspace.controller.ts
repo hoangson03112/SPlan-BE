@@ -63,7 +63,7 @@ export class WorkspaceController {
     return this.workspaceService.updateWorkspace(workspaceId, dto, userId);
   }
 
-  @Delete(':id')
+  @Delete(':id/delete')
   async deleteWorkspace(
     @Param('id') workspaceId: string,
     @CurrentUser('id') userId: string,
